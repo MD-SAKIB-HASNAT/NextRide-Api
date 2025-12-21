@@ -1,8 +1,10 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { UserService } from 'src/user/user.service';
 import { TempOtpService } from './services/temp-otp.service';
 import { RegisterDto } from './dto/register.dto';
 import * as nodemailer from 'nodemailer';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +13,7 @@ export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly tempOtpService: TempOtpService,
+    private readonly jwtService: JwtService,
   ) {
     this.initializeMailer();
   }
@@ -139,6 +142,42 @@ export class AuthService {
     return {
       success: true,
       message: 'OTP resent successfully',
+    };
+  }
+
+  async login(email: string, password: string) {
+    const user = await this.userService.findByEmail(email);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.emailVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in');
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Generate JWT token
+    const payload = { 
+      sub: user._id, 
+      email: user.email, 
+      role: user.role 
+    };
+    const token = this.jwtService.sign(payload);
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user.toObject();
+
+    return {
+      success: true,
+      message: 'Login successful',
+      token,
+      user: userWithoutPassword,
     };
   }
 }
