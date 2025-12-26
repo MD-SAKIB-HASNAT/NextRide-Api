@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { UserService } from 'src/user/user.service';
 import { TempOtpService } from './services/temp-otp.service';
 import { RegisterDto } from './dto/register.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as nodemailer from 'nodemailer';
 import * as bcrypt from 'bcrypt';
 
@@ -61,6 +63,38 @@ export class AuthService {
     } catch (error) {
       console.error('Failed to send OTP email:', error);
       throw new Error('Failed to send verification email');
+    }
+  }
+
+  private async sendResetOtpEmail(email: string, otp: string): Promise<void> {
+    try {
+      await this.mailer.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'NextRide Password Reset OTP',
+        html: `
+          <div style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+            <div style="background-color: white; padding: 30px; border-radius: 10px; max-width: 400px; margin: 0 auto;">
+              <h2 style="color: #333; text-align: center;">Password Reset</h2>
+              <p style="color: #666; text-align: center; margin: 20px 0;">
+                Use the following OTP to reset your password:
+              </p>
+              <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0;">
+                <h1 style="color: #0ea5e9; letter-spacing: 5px; margin: 0; font-size: 32px;">${otp}</h1>
+              </div>
+              <p style="color: #999; text-align: center; font-size: 12px;">
+                This OTP will expire in 10 minutes.
+              </p>
+              <p style="color: #666; text-align: center; margin-top: 20px; font-size: 12px;">
+                If you didn't request this, please ignore this email.
+              </p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (error) {
+      console.error('Failed to send password reset email:', error);
+      throw new Error('Failed to send password reset email');
     }
   }
 
@@ -145,6 +179,44 @@ export class AuthService {
     };
   }
 
+  async requestPasswordReset(forgotPasswordDto: ForgotPasswordDto) {
+    const { email } = forgotPasswordDto;
+    const user = await this.userService.findByEmail(email);
+
+    if (!user) {
+      throw new BadRequestException('Email not found');
+    }
+
+    // Generate OTP (10 minutes by default)
+    const otp = this.generateOtp();
+    await this.tempOtpService.storeOtp(email, otp, 10);
+
+    await this.sendResetOtpEmail(email, otp);
+
+    return {
+      success: true,
+      message: 'Reset OTP sent to your email',
+    };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { email, otp, newPassword } = resetPasswordDto;
+
+    // Verify OTP
+    await this.tempOtpService.verifyOtp(email, otp);
+
+    // Update password
+    await this.userService.updatePassword(email, newPassword);
+
+    // Remove OTP
+    await this.tempOtpService.deleteOtp(email);
+
+    return {
+      success: true,
+      message: 'Password reset successful',
+    };
+  }
+
   async login(email: string, password: string) {
     const user = await this.userService.findByEmail(email);
 
@@ -164,7 +236,7 @@ export class AuthService {
 
     // Generate JWT token
     const payload = { 
-      sub: user._id, 
+      userId: user._id, 
       email: user.email, 
       role: user.role 
     };

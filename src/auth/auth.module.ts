@@ -6,8 +6,9 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { TempOtpService } from './services/temp-otp.service';
 import { TempOtp, TempOtpSchema } from './schemas/temp-otp.schema';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthGuard } from './guards/auth.guard';
 import { UserModule } from 'src/user/user.module';
+import { FileUploadService } from 'src/common/services/file-upload.service';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from 'src/user/user.module';
     UserModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, TempOtpService, JwtStrategy]
+  providers: [AuthService, TempOtpService, FileUploadService, AuthGuard],
+  exports: [AuthGuard, JwtModule]
 })
 export class AuthModule {}
