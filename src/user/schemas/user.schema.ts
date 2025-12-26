@@ -25,6 +25,9 @@ export class User extends Document {
   @Prop({ type: String, default: null })
   licenseFile: string | null;
 
+  @Prop({ type: String, default: null })
+  profilePhoto: string | null;
+
   @Prop({ default: false })
   emailVerified: boolean;
 

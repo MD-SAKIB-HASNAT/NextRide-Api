@@ -1,13 +1,17 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from './schemas/user.schema';
 import * as bcrypt from 'bcrypt';
 import { UserStatus } from 'src/common/enums/user.enum';
+import { FileUploadService } from 'src/common/services/file-upload.service';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+    private fileUploadService: FileUploadService,
+  ) {}
 
   async createUser(
     name: string,
@@ -79,5 +83,67 @@ export class UserService {
     await user.save();
 
     return user;
+  }
+
+  async updateProfile(
+    userId: string,
+    updateData: { name?: string; phone?: string },
+    file?: Express.Multer.File,
+  ) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Update user fields
+    if (updateData.name) user.name = updateData.name;
+    if (updateData.phone) user.phone = updateData.phone;
+
+    // Handle profile photo upload
+    if (file) {
+      // Delete old photo if exists
+      if (user.profilePhoto) {
+        await this.fileUploadService.deleteFile(user.profilePhoto);
+      }
+      // Save new photo path
+      user.profilePhoto = file.path;
+    }
+
+    await user.save();
+
+    // Return user without password
+    const { password, ...userWithoutPassword } = user.toObject();
+    return userWithoutPassword;
+  }
+
+  async changePassword(
+    userId: string,
+    passwordData: { currentPassword: string; newPassword: string },
+  ) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(
+      passwordData.currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(
+      passwordData.newPassword,
+      saltRounds,
+    );
+
+    user.password = hashedPassword;
+    await user.save();
+
+    return { message: 'Password changed successfully' };
   }
 }

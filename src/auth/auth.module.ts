@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -18,7 +18,7 @@ import { FileUploadService } from 'src/common/services/file-upload.service';
       secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
       signOptions: { expiresIn: '7d' },
     }),
-    UserModule,
+    forwardRef(() => UserModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, TempOtpService, FileUploadService, AuthGuard],

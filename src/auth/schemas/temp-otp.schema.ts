@@ -14,6 +14,3 @@ export class TempOtp extends Document {
 }
 
 export const TempOtpSchema = SchemaFactory.createForClass(TempOtp);
-
-// Set TTL index to automatically delete expired OTPs
-TempOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
