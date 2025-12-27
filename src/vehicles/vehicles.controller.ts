@@ -2,7 +2,7 @@ import {
   Controller,
   Post,
   Get,
-  Put,
+  Patch,
   Delete,
   Param,
   Body,
@@ -17,11 +17,15 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
-import { UserVehicleFilterDto } from './dto/user-vehicle-filter.dto';
+
 import { CursorPagination } from 'src/common/decorators/cursor-pagination.decorator';
 import type { PaginationParams } from 'src/common/services/pagination.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
+import { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { UserRole } from 'src/common/enums/user.enum';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -67,63 +71,35 @@ export class VehiclesController {
     );
   }
 
-  @Get('user/my-listings')
+  @Get('filtered-listings')
   @UseGuards(AuthGuard)
-  async getUserVehicles(@Request() req: any, @CursorPagination() page: PaginationParams) {
-    const user = req.user;
-    if (!user || !user.userId) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.vehiclesService.getUserVehicles(user.userId, page);
-  }
-
-  @Get('user/my-listings-filtered')
-  @UseGuards(AuthGuard)
-  async getUserVehiclesFiltered(
+  async getVehiclesFiltered(
     @Request() req: any,
-    @Query() filters: UserVehicleFilterDto,
-    @CursorPagination() page: PaginationParams,
-  ) {
-    const user = req.user;
-    if (!user || !user.userId) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.vehiclesService.getUserVehiclesFiltered(user.userId, filters, page);
-  }
-
-  @Get('user/summary')
-  @UseGuards(AuthGuard)
-  async getUserSummary(@Request() req: any) {
-    const user = req.user;
-    if (!user || !user.userId) {
-      throw new BadRequestException('User not authenticated');
-    }
-
-    return this.vehiclesService.getUserSummary(user.userId);
-  }
-
-  @Get('type/:vehicleType')
-  async getVehiclesByType(
-    @Param('vehicleType') vehicleType: string,
-    @CursorPagination() page: PaginationParams,
-  ) {
-    return this.vehiclesService.getVehiclesByType(vehicleType, page);
-  }
-
-  @Get('type/:vehicleType/filter')
-  async filterVehicles(
-    @Param('vehicleType') vehicleType: string,
     @Query() filters: VehicleFilterDto,
     @CursorPagination() page: PaginationParams,
   ) {
-    return this.vehiclesService.filterVehicles(vehicleType, filters, page);
+    const user = req.user;
+    if (!user || !user.userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    return this.vehiclesService.getVehiclesFiltered(user.userId, filters, page);
   }
 
   @Get(':id')
   async getVehicleById(@Param('id') id: string) {
     return this.vehiclesService.getVehicleById(id);
+  }
+
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Patch('status/:id')
+  async updateVehicleStatus(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: UpdateVehicleStatusDto,
+  ) {
+    return this.vehiclesService.updateVehicleStatus(id, body.status);
   }
 
 }

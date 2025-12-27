@@ -24,6 +24,7 @@ async function bootstrap() {
       whitelist: true, // remove extra fields
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
   const configService = app.get(ConfigService);

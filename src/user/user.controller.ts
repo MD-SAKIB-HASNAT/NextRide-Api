@@ -1,8 +1,7 @@
-import { Controller, Get, Param, Put, Body, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Param, Put, Body, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
 import { UserService } from './user.service';
+import { FileUploadService } from 'src/common/services/file-upload.service';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -11,6 +10,17 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @Get('summary')
+  @UseGuards(AuthGuard)
+  async getUserSummary(@Request() req: any) {
+    const user = req.user;
+    if (!user || !user.userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    return this.userService.getUserSummary(user.userId);
+  }
 
   @Get(':id')
   async getUserById(@Param('id') id: string) {
@@ -21,20 +31,8 @@ export class UserController {
   @Put('profile')
   @UseInterceptors(
     FileInterceptor('profilePhoto', {
-      storage: diskStorage({
-        destination: './uploads/profiles',
-        filename: (req, file, callback) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `profile-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, callback) => {
-        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) {
-          return callback(new Error('Only image files are allowed!'), false);
-        }
-        callback(null, true);
-      },
+      storage: new FileUploadService().getStorageConfig('profiles'),
+      fileFilter: new FileUploadService().getFileFilter(['.jpg', '.jpeg', '.png', '.gif']),
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
     }),
   )

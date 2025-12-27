@@ -105,4 +105,12 @@ export class FileUploadService {
       throw new BadRequestException('File upload failed');
     }
   }
+
+  getProfilePhotoInterceptorConfig() {
+    return {
+      storage: this.getStorageConfig('profiles'),
+      fileFilter: this.getFileFilter(['.jpg', '.jpeg', '.png', '.gif']),
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+    };
+  }
 }

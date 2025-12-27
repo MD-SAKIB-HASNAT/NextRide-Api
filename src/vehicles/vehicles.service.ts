@@ -3,17 +3,19 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Vehicle } from './schemas/vehicle.schema';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { UserVehicleFilterDto } from './dto/user-vehicle-filter.dto';
 import { PaymentStatus, VehicleStatus, VehicleType } from 'src/common/enums/vehicle.enum';
 import { FileUploadService } from 'src/common/services/file-upload.service';
 import { PaginationService, PaginationParams, PaginatedResult } from 'src/common/services/pagination.service';
 import { UserSummary } from 'src/user/schemas/user-summary.schema';
+import { VehicleFilterDto } from './dto/vehicle-filter.dto';
+import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
 
 @Injectable()
 export class VehiclesService {
   constructor(
     @InjectModel(Vehicle.name) private vehicleModel: Model<Vehicle>,
     @InjectModel(UserSummary.name) private userSummaryModel: Model<UserSummary>,
+    @InjectModel(SystemSetting.name) private settingsModel: Model<SystemSetting>,
     private fileUploadService: FileUploadService,
     private paginationService: PaginationService,
   ) {}
@@ -27,6 +29,9 @@ export class VehiclesService {
     try {
       const imagePaths = await this.fileUploadService.uploadFiles(images, 'vehicles/images');
       const videoPaths = video ? await this.fileUploadService.uploadFiles([video], 'vehicles/videos') : [];
+
+      const systemSetting = await this.settingsModel.find();
+      const platformFee = createVehicleDto.price * systemSetting[0]?.commissionRate;
       
       const userObjectId = new Types.ObjectId(userId);
       const vehicle = new this.vehicleModel({
@@ -36,6 +41,7 @@ export class VehiclesService {
         userId: userObjectId,
         status: VehicleStatus.PENDING,
         paymentStatus: PaymentStatus.PENDING,
+        platformFee: platformFee,
       });
 
       const savedVehicle = await vehicle.save();
@@ -51,30 +57,9 @@ export class VehiclesService {
     }
   }
 
-  async getUserVehicles(userId: string, params: PaginationParams): Promise<PaginatedResult<Vehicle>> {
-    try {
-      const limit = this.paginationService.clampLimit(params.limit);
-      const lastId = this.paginationService.decodeCursor(params.cursor);
-
-      const query: any = { userId: new Types.ObjectId(userId) };
-      if (lastId) {
-        query._id = { $gt: lastId };
-      }
-
-      const items = await this.vehicleModel
-        .find(query)
-        .sort({ _id: 1 })
-        .limit(limit + 1);
-
-      return this.paginationService.buildResponse(items as any, limit);
-    } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to fetch user vehicles');
-    }
-  }
-
-  async getUserVehiclesFiltered(
+  async getVehiclesFiltered(
     userId: string,
-    filters: UserVehicleFilterDto,
+    filters: VehicleFilterDto,
     params: PaginationParams,
   ): Promise<PaginatedResult<Vehicle>> {
     try {
@@ -95,61 +80,6 @@ export class VehiclesService {
       if (filters.status) {
         query.status = filters.status;
       }
-
-      if (lastId) {
-        query._id = { $gt: lastId };
-      }
-
-      const items = await this.vehicleModel
-        .find(query)
-        .sort({ _id: 1 })
-        .limit(limit + 1);
-
-      return this.paginationService.buildResponse(items as any, limit);
-    } catch (error) {
-      throw new BadRequestException(
-        error.message || 'Failed to fetch filtered user vehicles',
-      );
-    }
-  }
-
-  async getVehiclesByType(vehicleType: string, params: PaginationParams): Promise<PaginatedResult<Vehicle>> {
-    try {
-      const limit = this.paginationService.clampLimit(params.limit);
-      const lastId = this.paginationService.decodeCursor(params.cursor);
-
-      const query: any = {
-        vehicleType: vehicleType,
-        status: VehicleStatus.ACTIVE,
-        paymentStatus: PaymentStatus.PAID,
-      };
-      
-      if (lastId) {
-        query._id = { $gt: lastId };
-      }
-
-      const items = await this.vehicleModel
-        .find(query)
-        .sort({ _id: 1 })
-        .limit(limit + 1)
-        .populate('userId', 'name phone email');
-
-      return this.paginationService.buildResponse(items as any, limit);
-    } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to fetch vehicles');
-    }
-  }
-
-  async filterVehicles(vehicleType: string, filters: any, params: PaginationParams): Promise<PaginatedResult<Vehicle>> {
-    try {
-      const limit = this.paginationService.clampLimit(params.limit);
-      const lastId = this.paginationService.decodeCursor(params.cursor);
-
-      const query: any = {
-        vehicleType: vehicleType,
-        status: VehicleStatus.ACTIVE,
-        paymentStatus: PaymentStatus.PAID,
-      };
 
       // Search by brand or model name
       if (filters.search) {
@@ -189,12 +119,13 @@ export class VehiclesService {
       const items = await this.vehicleModel
         .find(query)
         .sort({ _id: 1 })
-        .limit(limit + 1)
-        .populate('userId', 'name phone email');
+        .limit(limit + 1);
 
       return this.paginationService.buildResponse(items as any, limit);
     } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to filter vehicles');
+      throw new BadRequestException(
+        error.message || 'Failed to fetch filtered user vehicles',
+      );
     }
   }
 
@@ -214,21 +145,29 @@ export class VehiclesService {
     }
   }
 
-  async getUserSummary(userId: string) {
+  async updateVehicleStatus(vehicleId: string, status: VehicleStatus) {
     try {
-      let summary = await this.userSummaryModel.findOne({ userId: new Types.ObjectId(userId) });
-      
-      if (!summary) {
-        summary = await this.userSummaryModel.create({
-          userId: new Types.ObjectId(userId),
-        });
+      if (!Object.values(VehicleStatus).includes(status)) {
+        throw new BadRequestException('Invalid vehicle status');
       }
 
-      return summary;
+      const vehicle = await this.vehicleModel.findById(vehicleId);
+
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+
+      const oldStatus = vehicle.status;
+      vehicle.status = status;
+      const updated = await vehicle.save();
+
+      if (oldStatus !== status) {
+        await this.updateUserSummaryOnStatusChange(vehicle.userId as Types.ObjectId, oldStatus, status);
+      }
+
+      return updated;
     } catch (error) {
-      throw new BadRequestException(
-        error.message || 'Failed to fetch user summary',
-      );
+      throw new BadRequestException(error.message || 'Failed to update vehicle status');
     }
   }
 
@@ -326,6 +265,47 @@ export class VehiclesService {
       );
     } catch (error) {
       console.error('Failed to update user summary on payment change:', error);
+    }
+  }
+
+  async getAdminFilteredListings(
+    filters: any,
+    params: PaginationParams,
+  ): Promise<PaginatedResult<Vehicle>> {
+    try {
+      const limit = this.paginationService.clampLimit(params.limit);
+      const lastId = this.paginationService.decodeCursor(params.cursor);
+
+      const query: any = {};
+
+      // Apply filters only if provided
+      if (filters.vehicleType) {
+        query.vehicleType = filters.vehicleType;
+      }
+
+      if (filters.paymentStatus) {
+        query.paymentStatus = filters.paymentStatus;
+      }
+
+      if (filters.vehicleStatus || filters.status) {
+        query.status = filters.vehicleStatus || filters.status;
+      }
+
+      if (lastId) {
+        query._id = { $gt: lastId };
+      }
+
+      const items = await this.vehicleModel
+        .find(query)
+        .sort({ _id: 1 })
+        .limit(limit + 1)
+        .populate('userId', 'name email phone');
+
+      return this.paginationService.buildResponse(items as any, limit);
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Failed to fetch admin filtered listings',
+      );
     }
   }
 

@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { TempOtpService } from './services/temp-otp.service';
 import { TempOtp, TempOtpSchema } from './schemas/temp-otp.schema';
 import { AuthGuard } from './guards/auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { UserModule } from 'src/user/user.module';
 import { FileUploadService } from 'src/common/services/file-upload.service';
 
@@ -21,7 +22,7 @@ import { FileUploadService } from 'src/common/services/file-upload.service';
     forwardRef(() => UserModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TempOtpService, FileUploadService, AuthGuard],
-  exports: [AuthGuard, JwtModule]
+  providers: [AuthService, TempOtpService, FileUploadService, AuthGuard, RolesGuard],
+  exports: [AuthGuard, RolesGuard, JwtModule]
 })
 export class AuthModule {}

@@ -7,6 +7,7 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { SellerModule } from './seller/seller.module';
+import { SettingsModule } from './Admin/settings/settings.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SellerModule } from './seller/seller.module';
     AuthModule,
     VehiclesModule,
     SellerModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

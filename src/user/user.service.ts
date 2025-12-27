@@ -1,6 +1,12 @@
-import { Injectable, ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User } from './schemas/user.schema';
 import * as bcrypt from 'bcrypt';
 import { UserStatus } from 'src/common/enums/user.enum';
@@ -10,6 +16,7 @@ import { FileUploadService } from 'src/common/services/file-upload.service';
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel('UserSummary') private userSummaryModel: Model<any>,
     private fileUploadService: FileUploadService,
   ) {}
 
@@ -145,5 +152,25 @@ export class UserService {
     await user.save();
 
     return { message: 'Password changed successfully' };
+  }
+
+  async getUserSummary(userId: string) {
+    try {
+      let summary = await this.userSummaryModel.findOne({
+        userId: new Types.ObjectId(userId),
+      });
+
+      if (!summary) {
+        summary = await this.userSummaryModel.create({
+          userId: new Types.ObjectId(userId),
+        });
+      }
+
+      return summary;
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Failed to fetch user summary',
+      );
+    }
   }
 }

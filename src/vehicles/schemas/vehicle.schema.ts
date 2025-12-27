@@ -20,6 +20,9 @@ export class Vehicle extends Document {
   price: number;
 
   @Prop({ required: true })
+  platformFee: number;
+
+  @Prop({ required: true })
   mileage: number;
 
   @Prop({ required: true, enum: Object.values(FuelType) })
