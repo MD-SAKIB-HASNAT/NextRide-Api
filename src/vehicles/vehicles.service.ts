@@ -11,6 +11,7 @@ import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
 import { UserRole } from 'src/common/enums/user.enum';
+import e from 'express';
 
 @Injectable()
 export class VehiclesService {
@@ -60,8 +61,7 @@ export class VehiclesService {
     }
   }
 
-  async getVehiclesFiltered(
-    userId: string,
+  async getPublicVehiclesFiltered(
     filters: VehicleFilterDto,
     params: PaginationParams,
   ): Promise<PaginatedResult<Vehicle>> {
@@ -69,7 +69,79 @@ export class VehiclesService {
       const limit = this.paginationService.clampLimit(params.limit);
       const lastId = this.paginationService.decodeCursor(params.cursor);
 
-      const query: any = { userId: new Types.ObjectId(userId) };
+
+      const query: any = {};
+
+      // Apply filters only if provided
+      if (filters.vehicleType) {
+        query.vehicleType = filters.vehicleType;
+      }
+
+      if (filters.paymentStatus) {
+        query.paymentStatus = filters.paymentStatus;
+      }
+
+      if (filters.status) {
+        query.status = filters.status;
+      }
+
+      // Search by brand or model name
+      if (filters.search) {
+        query.$or = [
+          { make: { $regex: filters.search, $options: 'i' } },
+          { modelName: { $regex: filters.search, $options: 'i' } },
+        ];
+      }
+
+      // Filter by brand
+      if (filters.make) {
+        query.make = filters.make;
+      }
+
+      // Filter by price range
+      if (filters.minPrice || filters.maxPrice) {
+        query.price = {};
+        if (filters.minPrice) query.price.$gte = filters.minPrice;
+        if (filters.maxPrice) query.price.$lte = filters.maxPrice;
+      }
+
+      // Filter by date range
+      if (filters.fromDate || filters.toDate) {
+        query.createdAt = {};
+        if (filters.fromDate) query.createdAt.$gte = new Date(filters.fromDate);
+        if (filters.toDate) {
+          const toDate = new Date(filters.toDate);
+          toDate.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = toDate;
+        }
+      }
+
+      if (lastId) {
+        query._id = { $gt: lastId };
+      }
+
+      const items = await this.vehicleModel
+        .find(query)
+        .sort({ _id: 1 })
+        .limit(limit + 1);
+
+      return this.paginationService.buildResponse(items as any, limit);
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Failed to fetch filtered user vehicles',
+      );
+    }
+  }
+
+  async getVehiclesFiltered(
+    user: any,
+    filters: VehicleFilterDto,
+    params: PaginationParams,
+  ): Promise<PaginatedResult<Vehicle>> {
+    try {
+      const limit = this.paginationService.clampLimit(params.limit);
+      const lastId = this.paginationService.decodeCursor(params.cursor);
+      const query: any = user.role === UserRole.ADMIN ? {} : { userId: new Types.ObjectId(user.userId) };
 
       // Apply filters only if provided
       if (filters.vehicleType) {
@@ -148,62 +220,21 @@ export class VehiclesService {
     }
   }
 
-  async updateVehicle(
-    vehicleId: string,
-    userId: string,
-    update: Partial<CreateVehicleDto>,
-  ): Promise<Vehicle> {
+  async deleteVehicle(vehicleId: string, user: any) {
     try {
       const vehicle = await this.vehicleModel.findById(vehicleId);
       if (!vehicle) {
         throw new BadRequestException('Vehicle not found');
       }
-      if (String(vehicle.userId) !== String(userId)) {
-        throw new BadRequestException('Not authorized to update this listing');
-      }
-
-      const allowed: (keyof CreateVehicleDto)[] = [
-        'vehicleType',
-        'make',
-        'modelName',
-        'year',
-        'price',
-        'mileage',
-        'fuelType',
-        'condition',
-        'description',
-        'location',
-        'phone',
-      ];
-
-      for (const key of allowed) {
-        if (update[key] !== undefined) {
-          (vehicle as any)[key] = update[key];
-        }
-      }
-
-      // Recalculate platform fee if price changed
-      if (update.price !== undefined) {
-        const systemSetting = await this.settingsModel.find();
-        vehicle.platformFee = vehicle.price * (systemSetting[0]?.commissionRate ?? 0);
-      }
-
-      const updated = await vehicle.save();
-      return updated;
-    } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to update vehicle');
-    }
-  }
-
-  async deleteVehicle(vehicleId: string, userId: string) {
-    try {
-      const vehicle = await this.vehicleModel.findById(vehicleId);
-      if (!vehicle) {
-        throw new BadRequestException('Vehicle not found');
-      }
-      if (String(vehicle.userId) !== String(userId)) {
+      const userRole = (user.role || user.userRole || '').toLowerCase();
+      const isOwner = String(vehicle.userId) === String(user.userId);
+      const isAdmin = userRole === 'admin';
+      if (!isOwner && !isAdmin) {
         throw new BadRequestException('Not authorized to delete this listing');
       }
+
+      //delete form update request table 
+      await this.updateRequestModel.deleteMany({ vehicleId: vehicle._id });
 
       // Delete files
       if (vehicle.images?.length) {
@@ -270,6 +301,16 @@ export class VehiclesService {
       }
 
       const oldStatus = vehicle.status;
+      if(status === VehicleStatus.ACTIVE){
+        vehicle.paymentStatus = PaymentStatus.PAID;
+      }
+      if(status === VehicleStatus.SOLD){
+        vehicle.paymentStatus = PaymentStatus.PAID;
+      }
+      if(status === VehicleStatus.REJECTED){
+        vehicle.paymentStatus = PaymentStatus.PENDING;
+      }
+
       vehicle.status = status;
       const updated = await vehicle.save();
 
@@ -348,79 +389,6 @@ export class VehiclesService {
     }
   }
 
-  async updateUserSummaryOnPaymentChange(
-    userId: Types.ObjectId,
-    oldPaymentStatus: string,
-    newPaymentStatus: string,
-  ) {
-    try {
-      const updateData: any = { $inc: {} };
-
-      // Decrement old payment status
-      if (oldPaymentStatus === PaymentStatus.PENDING) {
-        updateData.$inc.pendingCount = -1;
-      } else if (oldPaymentStatus === PaymentStatus.PAID) {
-        updateData.$inc.paidCount = -1;
-      }
-
-      // Increment new payment status
-      if (newPaymentStatus === PaymentStatus.PENDING) {
-        updateData.$inc.pendingCount = 1;
-      } else if (newPaymentStatus === PaymentStatus.PAID) {
-        updateData.$inc.paidCount = 1;
-      }
-
-      await this.userSummaryModel.findOneAndUpdate(
-        { userId },
-        updateData,
-        { new: true },
-      );
-    } catch (error) {
-      console.error('Failed to update user summary on payment change:', error);
-    }
-  }
-
-  async getAdminFilteredListings(
-    filters: any,
-    params: PaginationParams,
-  ): Promise<PaginatedResult<Vehicle>> {
-    try {
-      const limit = this.paginationService.clampLimit(params.limit);
-      const lastId = this.paginationService.decodeCursor(params.cursor);
-
-      const query: any = {};
-
-      // Apply filters only if provided
-      if (filters.vehicleType) {
-        query.vehicleType = filters.vehicleType;
-      }
-
-      if (filters.paymentStatus) {
-        query.paymentStatus = filters.paymentStatus;
-      }
-
-      if (filters.vehicleStatus || filters.status) {
-        query.status = filters.vehicleStatus || filters.status;
-      }
-
-      if (lastId) {
-        query._id = { $gt: lastId };
-      }
-
-      const items = await this.vehicleModel
-        .find(query)
-        .sort({ _id: 1 })
-        .limit(limit + 1)
-        .populate('userId', 'name email phone');
-
-      return this.paginationService.buildResponse(items as any, limit);
-    } catch (error) {
-      throw new BadRequestException(
-        error.message || 'Failed to fetch admin filtered listings',
-      );
-    }
-  }
-
   async createUpdateRequest(
     vehicleId: string,
     userId: string,
@@ -462,7 +430,7 @@ export class VehiclesService {
       vehicle.phone = updateData.phone;
       vehicle.images = imagePaths;
       vehicle.video = videoPaths[0] || null;
-      vehicle.status = VehicleStatus.PENDING; // Set to pending review
+      vehicle.status = VehicleStatus.PENDING; 
       
       // Recalculate platformFee
       const systemSetting = await this.settingsModel.find();

@@ -26,6 +26,7 @@ import { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { UserRole } from 'src/common/enums/user.enum';
+import { VehicleType } from 'src/common/enums/vehicle.enum';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -71,6 +72,16 @@ export class VehiclesController {
     );
   }
 
+  @Get('public/filtered-listings')
+  async getPublicVehiclesFiltered(
+    @Request() req: any,
+    @Query() filters: VehicleFilterDto,
+    @CursorPagination() page: PaginationParams,
+  ) {
+    return this.vehiclesService.getPublicVehiclesFiltered(filters, page);
+  }
+
+
   @Get('filtered-listings')
   @UseGuards(AuthGuard)
   async getVehiclesFiltered(
@@ -79,11 +90,11 @@ export class VehiclesController {
     @CursorPagination() page: PaginationParams,
   ) {
     const user = req.user;
-    if (!user || !user.userId) {
+
+    if (!user.userId) {
       throw new BadRequestException('User not authenticated');
     }
-
-    return this.vehiclesService.getVehiclesFiltered(user.userId, filters, page);
+    return this.vehiclesService.getVehiclesFiltered(user, filters, page);
   }
 
   @Get(':id')
@@ -91,22 +102,9 @@ export class VehiclesController {
     return this.vehiclesService.getVehicleById(id);
   }
 
-  @Patch(':id')
-  @UseGuards(AuthGuard)
-  async updateVehicle(
-    @Request() req: any,
-    @Param('id') id: string,
-    @Body() body: any,
-  ) {
-    const user = req.user;
-    if (!user || !user.userId) {
-      throw new BadRequestException('User not authenticated');
-    }
-    return this.vehiclesService.updateVehicle(id, user.userId, body);
-  }
-
   @Delete(':id')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   async deleteVehicle(
     @Request() req: any,
     @Param('id') id: string,
@@ -115,7 +113,7 @@ export class VehiclesController {
     if (!user || !user.userId) {
       throw new BadRequestException('User not authenticated');
     }
-    return this.vehiclesService.deleteVehicle(id, user.userId);
+    return this.vehiclesService.deleteVehicle(id, user);
   }
 
   @Post(':id/update-request')
