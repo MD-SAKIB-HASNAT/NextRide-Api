@@ -17,7 +17,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
-
+import { UpdateRequestActionDto } from './dto/update-request-action.dto';
 import { CursorPagination } from 'src/common/decorators/cursor-pagination.decorator';
 import type { PaginationParams } from 'src/common/services/pagination.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
@@ -91,6 +91,70 @@ export class VehiclesController {
     return this.vehiclesService.getVehicleById(id);
   }
 
+  @Patch(':id')
+  @UseGuards(AuthGuard)
+  async updateVehicle(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const user = req.user;
+    if (!user || !user.userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+    return this.vehiclesService.updateVehicle(id, user.userId, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  async deleteVehicle(
+    @Request() req: any,
+    @Param('id') id: string,
+  ) {
+    const user = req.user;
+    if (!user || !user.userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+    return this.vehiclesService.deleteVehicle(id, user.userId);
+  }
+
+  @Post(':id/update-request')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'images', maxCount: 5 },
+        { name: 'video', maxCount: 1 },
+      ],
+      {
+        storage: new FileUploadService().getFieldStorage('vehicles'),
+        fileFilter: new FileUploadService().getFileFilter(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']),
+      },
+    ),
+  )
+  async createUpdateRequest(
+    @Request() req: any,
+    @Param('id') vehicleId: string,
+    @Body() body: any,
+    @UploadedFiles() files: { images?: Express.Multer.File[]; video?: Express.Multer.File[] },
+  ) {
+    const user = req.user;
+    if (!user || !user.userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    const images = files?.images || [];
+    const video = files?.video?.[0];
+
+    return this.vehiclesService.createUpdateRequest(
+      vehicleId,
+      user.userId,
+      body,
+      images,
+      video,
+    );
+  }
+
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch('status/:id')
@@ -100,6 +164,34 @@ export class VehiclesController {
     @Body() body: UpdateVehicleStatusDto,
   ) {
     return this.vehiclesService.updateVehicleStatus(id, body.status);
+  }
+
+  @Get('updates-requests/list')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  async getAllUpdateRequestsList(
+    @Request() req: any,
+    @CursorPagination() pagination: PaginationParams,
+  ) {
+    return this.vehiclesService.getAllUpdateRequestsList(pagination, req.user);
+  }
+
+
+  @Patch('admin/update-requests/:id')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async handleUpdateRequest(
+    @Request() req: any,
+    @Param('id') updateRequestId: string,
+    @Body() dto: UpdateRequestActionDto,
+  ) {
+    const adminId = req.user?.userId || req.user?.id;
+    return this.vehiclesService.handleUpdateRequest(
+      updateRequestId,
+      dto.action,
+      adminId,
+      dto.note,
+    );
   }
 
 }

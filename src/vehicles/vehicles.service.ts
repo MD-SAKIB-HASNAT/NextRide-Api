@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Vehicle } from './schemas/vehicle.schema';
+import { UpdateRequest } from './schemas/update-request.schema';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { PaymentStatus, VehicleStatus, VehicleType } from 'src/common/enums/vehicle.enum';
 import { FileUploadService } from 'src/common/services/file-upload.service';
@@ -9,12 +10,14 @@ import { PaginationService, PaginationParams, PaginatedResult } from 'src/common
 import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
+import { UserRole } from 'src/common/enums/user.enum';
 
 @Injectable()
 export class VehiclesService {
   constructor(
     @InjectModel(Vehicle.name) private vehicleModel: Model<Vehicle>,
     @InjectModel(UserSummary.name) private userSummaryModel: Model<UserSummary>,
+    @InjectModel(UpdateRequest.name) private updateRequestModel: Model<UpdateRequest>,
     @InjectModel(SystemSetting.name) private settingsModel: Model<SystemSetting>,
     private fileUploadService: FileUploadService,
     private paginationService: PaginationService,
@@ -133,7 +136,7 @@ export class VehiclesService {
     try {
       const vehicle = await this.vehicleModel
         .findById(id)
-        .populate('userId', 'name phone email role status emailVerified createdAt');
+        .populate('userId', 'name phone email role status profilePhoto emailVerified createdAt');
 
       if (!vehicle) {
         throw new BadRequestException('Vehicle not found');
@@ -142,6 +145,115 @@ export class VehiclesService {
       return vehicle;
     } catch (error) {
       throw new BadRequestException(error.message || 'Failed to fetch vehicle details');
+    }
+  }
+
+  async updateVehicle(
+    vehicleId: string,
+    userId: string,
+    update: Partial<CreateVehicleDto>,
+  ): Promise<Vehicle> {
+    try {
+      const vehicle = await this.vehicleModel.findById(vehicleId);
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+      if (String(vehicle.userId) !== String(userId)) {
+        throw new BadRequestException('Not authorized to update this listing');
+      }
+
+      const allowed: (keyof CreateVehicleDto)[] = [
+        'vehicleType',
+        'make',
+        'modelName',
+        'year',
+        'price',
+        'mileage',
+        'fuelType',
+        'condition',
+        'description',
+        'location',
+        'phone',
+      ];
+
+      for (const key of allowed) {
+        if (update[key] !== undefined) {
+          (vehicle as any)[key] = update[key];
+        }
+      }
+
+      // Recalculate platform fee if price changed
+      if (update.price !== undefined) {
+        const systemSetting = await this.settingsModel.find();
+        vehicle.platformFee = vehicle.price * (systemSetting[0]?.commissionRate ?? 0);
+      }
+
+      const updated = await vehicle.save();
+      return updated;
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to update vehicle');
+    }
+  }
+
+  async deleteVehicle(vehicleId: string, userId: string) {
+    try {
+      const vehicle = await this.vehicleModel.findById(vehicleId);
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+      if (String(vehicle.userId) !== String(userId)) {
+        throw new BadRequestException('Not authorized to delete this listing');
+      }
+
+      // Delete files
+      if (vehicle.images?.length) {
+        this.fileUploadService.deleteFiles(vehicle.images);
+      }
+      if (vehicle.video) {
+        this.fileUploadService.deleteFile(vehicle.video);
+      }
+
+      // Adjust summary
+      await this.updateUserSummaryOnDelete(
+        vehicle.userId as Types.ObjectId,
+        vehicle.vehicleType,
+        vehicle.status,
+        vehicle.paymentStatus,
+      );
+
+      await vehicle.deleteOne();
+      return { success: true };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to delete vehicle');
+    }
+  }
+
+  private async updateUserSummaryOnDelete(
+    userId: Types.ObjectId,
+    vehicleType: string,
+    status: string,
+    paymentStatus: string,
+  ) {
+    try {
+      const inc: any = { totalListings: -1 };
+      if (vehicleType === VehicleType.BIKE) inc.bikePostCount = -1;
+      else if (vehicleType === VehicleType.CAR) inc.carPostCount = -1;
+
+      if (status === VehicleStatus.PENDING) inc.pendingCount = (inc.pendingCount || 0) - 1;
+      if (status === VehicleStatus.ACTIVE) inc.activeCount = (inc.activeCount || 0) - 1;
+      if (status === VehicleStatus.SOLD) inc.soldCount = (inc.soldCount || 0) - 1;
+      if (status === VehicleStatus.REJECTED) inc.rejectedCount = (inc.rejectedCount || 0) - 1;
+
+      if (paymentStatus === PaymentStatus.PAID) inc.paidCount = (inc.paidCount || 0) - 1;
+      else if (paymentStatus === PaymentStatus.PENDING) inc.pendingCount = (inc.pendingCount || 0) - 1;
+
+      await this.userSummaryModel.findOneAndUpdate(
+        { userId },
+        { $inc: inc },
+        { new: true },
+      );
+    } catch (err) {
+      console.error('Failed to update summary on delete:', err);
     }
   }
 
@@ -306,6 +418,144 @@ export class VehiclesService {
       throw new BadRequestException(
         error.message || 'Failed to fetch admin filtered listings',
       );
+    }
+  }
+
+  async createUpdateRequest(
+    vehicleId: string,
+    userId: string,
+    updateData: any,
+    images: any[],
+    video?: any,
+  ) {
+    try {
+      const vehicle = await this.vehicleModel.findById(vehicleId);
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+      if (String(vehicle.userId) !== String(userId)) {
+        throw new BadRequestException('Not authorized');
+      }
+
+      // Upload new images and video
+      const imagePaths = images.length ? await this.fileUploadService.uploadFiles(images, 'vehicles/images') : vehicle.images;
+      const videoPaths = video ? await this.fileUploadService.uploadFiles([video], 'vehicles/videos') : [vehicle.video];
+
+      // Delete old files if new ones are provided
+      if (images.length && vehicle.images?.length) {
+        this.fileUploadService.deleteFiles(vehicle.images);
+      }
+      if (video && vehicle.video) {
+        this.fileUploadService.deleteFile(vehicle.video);
+      }
+
+      // Update vehicle with new data directly
+      vehicle.make = updateData.make;
+      vehicle.modelName = updateData.modelName;
+      vehicle.year = Number(updateData.year);
+      vehicle.price = Number(updateData.price);
+      vehicle.mileage = Number(updateData.mileage);
+      vehicle.fuelType = updateData.fuelType;
+      vehicle.condition = updateData.condition;
+      vehicle.description = updateData.description;
+      vehicle.location = updateData.location;
+      vehicle.phone = updateData.phone;
+      vehicle.images = imagePaths;
+      vehicle.video = videoPaths[0] || null;
+      vehicle.status = VehicleStatus.PENDING; // Set to pending review
+      
+      // Recalculate platformFee
+      const systemSetting = await this.settingsModel.find();
+      vehicle.platformFee = vehicle.price * (systemSetting[0]?.commissionRate ?? 0);
+      
+      await vehicle.save();
+
+      // Create UpdateRequest record for approval workflow
+      const updateRequest = new this.updateRequestModel({
+        vehicleId: new Types.ObjectId(vehicleId),
+        userId: new Types.ObjectId(userId),
+        status: 'in-review',
+      });
+
+      return await updateRequest.save();
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to create update request');
+    }
+  }
+
+  async handleUpdateRequest(updateRequestId: string, action: string, adminId: string, note?: string) {
+    try {
+      const updateRequest = await this.updateRequestModel.findById(updateRequestId);
+      if (!updateRequest) {
+        throw new BadRequestException('Update request not found');
+      }
+
+      const vehicle = await this.vehicleModel.findById(updateRequest.vehicleId);
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+
+      if (action === 'approve') {
+        // Approve: set vehicle status back to active
+        vehicle.status = VehicleStatus.ACTIVE;
+        await vehicle.save();
+
+        updateRequest.status = 'approved';
+        updateRequest.updatedBy = new Types.ObjectId(adminId);
+        await updateRequest.save();
+
+        return { success: true, message: 'Update approved', vehicle };
+      } else if (action === 'reject') {
+        // Reject: set vehicle status back to active, store note
+        vehicle.status = VehicleStatus.ACTIVE;
+        await vehicle.save();
+
+        updateRequest.status = 'rejected';
+        updateRequest.updatedBy = new Types.ObjectId(adminId);
+        updateRequest.note = note || null;
+        await updateRequest.save();
+
+        return { success: true, message: 'Update rejected' };
+      } else {
+        throw new BadRequestException('Invalid action. Use "approve" or "reject"');
+      }
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to handle update request');
+    }
+  }
+
+  async getAllUpdateRequestsList(
+    params: PaginationParams,
+    user: any,
+  ): Promise<PaginatedResult<UpdateRequest>> {
+    try {
+      const limit = this.paginationService.clampLimit(params.limit);
+      const lastId = this.paginationService.decodeCursor(params.cursor);
+
+      const query: any = {};
+
+      if (user?.role === UserRole.USER) {
+        const userId = user?.userId || user?.id;
+        if (!userId) {
+          throw new BadRequestException('User not authenticated');
+        }
+        query.userId = new Types.ObjectId(userId);
+      }
+
+      if (lastId) {
+        query._id = { $gt: lastId };
+      }
+
+      const items = await this.updateRequestModel
+        .find(query)
+        .sort({ _id: 1 })
+        .limit(limit + 1)
+        .populate('vehicleId')
+        .populate('userId', 'name email role');
+
+      return this.paginationService.buildResponse(items as any, limit);
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to fetch update requests');
     }
   }
 
