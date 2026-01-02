@@ -10,6 +10,7 @@ import { SellerModule } from './seller/seller.module';
 import { SettingsModule } from './Admin/settings/settings.module';
 import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
 import { OrganizationModule } from './organization/organization.module';
+import { RentModule } from './rent/rent.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { OrganizationModule } from './organization/organization.module';
     SettingsModule,
     AdminDashboardModule,
     OrganizationModule,
+    RentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

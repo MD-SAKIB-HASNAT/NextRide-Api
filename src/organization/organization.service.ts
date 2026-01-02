@@ -71,6 +71,48 @@ export class OrganizationService {
     return this.listOrganizations({ ...filter, status: UserStatus.PENDING_APPROVAL }, params);
   }
 
+  async listActiveOrganizations(filter: FilterOrganizationDto, params: PaginationParams) {
+    const activeFilter: FilterOrganizationDto = {
+      ...filter,
+      status: UserStatus.ACTIVE,
+    };
+
+    const query: any = { role: UserRole.ORGANIZATION, status: UserStatus.ACTIVE };
+
+    if (activeFilter.search) {
+      const regex = new RegExp(activeFilter.search, 'i');
+      query.$or = [{ name: regex }, { email: regex }];
+    }
+
+    const limit = this.paginationService.clampLimit(activeFilter.limit ?? params.limit);
+    const lastId = this.paginationService.decodeCursor(activeFilter.cursor ?? params.cursor);
+
+    const items = await this.userModel
+      .find(lastId ? { ...query, _id: { $gt: lastId } } : query)
+      .sort({ _id: 1 })
+      .limit(limit + 1)
+      .select('-password -emailVerificationToken');
+
+    const result = this.paginationService.buildResponse(items as any, limit);
+    return {
+      data: result.data,
+      nextCursor: result.pageInfo.nextCursor,
+      hasMore: result.pageInfo.hasNextPage,
+    };
+  }
+
+  async getActiveOrganizationById(id: string) {
+    const organization = await this.userModel
+      .findOne({ _id: id, role: UserRole.ORGANIZATION, status: UserStatus.ACTIVE })
+      .select('-password -emailVerificationToken');
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return organization;
+  }
+
   async approveOrganization(userId: string) {
     const user = await this.userModel.findById(userId);
 
