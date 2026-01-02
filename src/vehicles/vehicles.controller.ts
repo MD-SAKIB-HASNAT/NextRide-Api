@@ -18,6 +18,7 @@ import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { UpdateRequestActionDto } from './dto/update-request-action.dto';
+import { UpdateRequestFilterDto } from './dto/update-request-filter.dto';
 import { CursorPagination } from 'src/common/decorators/cursor-pagination.decorator';
 import type { PaginationParams } from 'src/common/services/pagination.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
@@ -170,8 +171,9 @@ export class VehiclesController {
   async getAllUpdateRequestsList(
     @Request() req: any,
     @CursorPagination() pagination: PaginationParams,
+    @Query() filters: UpdateRequestFilterDto,
   ) {
-    return this.vehiclesService.getAllUpdateRequestsList(pagination, req.user);
+    return this.vehiclesService.getAllUpdateRequestsList(pagination, req.user, filters);
   }
 
   @Patch('admin/update-requests/:id')

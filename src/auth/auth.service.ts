@@ -7,6 +7,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as nodemailer from 'nodemailer';
 import * as bcrypt from 'bcrypt';
+import { UserRole, UserStatus } from 'src/common/enums/user.enum';
 
 @Injectable()
 export class AuthService {
@@ -226,6 +227,14 @@ export class AuthService {
 
     if (!user.emailVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
+    }
+
+    if (user.role === UserRole.ORGANIZATION && user.status === UserStatus.PENDING_APPROVAL) {
+      throw new UnauthorizedException('Organization account is pending admin approval');
+    }
+
+    if (user.status === UserStatus.BLOCKED) {
+      throw new UnauthorizedException('Account is blocked');
     }
 
     // Verify password

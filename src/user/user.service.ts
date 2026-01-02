@@ -9,8 +9,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User } from './schemas/user.schema';
 import * as bcrypt from 'bcrypt';
-import { UserStatus } from 'src/common/enums/user.enum';
+import { UserRole, UserStatus } from 'src/common/enums/user.enum';
 import { FileUploadService } from 'src/common/services/file-upload.service';
+import { PaginationService, PaginationParams } from 'src/common/services/pagination.service';
+import { FilterUserDto } from './dto/filter-user.dto';
 
 @Injectable()
 export class UserService {
@@ -18,6 +20,7 @@ export class UserService {
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel('UserSummary') private userSummaryModel: Model<any>,
     private fileUploadService: FileUploadService,
+    private paginationService: PaginationService,
   ) {}
 
   async createUser(
@@ -61,21 +64,27 @@ export class UserService {
   }
 
   async verifyUser(email: string) {
-    const user = await this.userModel.findOneAndUpdate(
-      { email },
-      {
-        emailVerified: true,
-        status: UserStatus.ACTIVE,
-      },
-      { new: true },
-    );
+    const user = await this.userModel.findOne({ email });
 
     if (!user) {
       throw new Error('User not found');
     }
 
+    // Organizations stay pending approval after email verification; others become active immediately.
+    const nextStatus =
+      user.role === UserRole.ORGANIZATION
+        ? UserStatus.PENDING_APPROVAL
+        : UserStatus.ACTIVE;
+
+    user.emailVerified = true;
+    user.status = nextStatus;
+
+    await user.save();
+
     return user;
   }
+
+  // Organization approval flows handled by OrganizationService
 
   async updatePassword(email: string, newPassword: string) {
     const user = await this.userModel.findOne({ email });
@@ -152,6 +161,52 @@ export class UserService {
     await user.save();
 
     return { message: 'Password changed successfully' };
+  }
+
+  async listUsers(filter: FilterUserDto, params: PaginationParams) {
+    const query: any = {};
+
+    if (filter.status) {
+      query.status = filter.status;
+    }
+
+    // Default to basic users unless a specific role filter is supplied
+    query.role = filter.role ?? UserRole.USER;
+
+    if (filter.search) {
+      const regex = new RegExp(filter.search, 'i');
+      query.$or = [{ name: regex }, { email: regex }, { phone: regex }];
+    }
+
+    const limit = this.paginationService.clampLimit(filter.limit ?? params.limit);
+    const lastId = this.paginationService.decodeCursor(filter.cursor ?? params.cursor);
+
+    const items = await this.userModel
+      .find(lastId ? { ...query, _id: { $gt: lastId } } : query)
+      .sort({ _id: 1 })
+      .limit(limit + 1);
+
+    const result = this.paginationService.buildResponse(items as any, limit);
+    return {
+      data: result.data,
+      nextCursor: result.pageInfo.nextCursor,
+      hasMore: result.pageInfo.hasNextPage,
+    };
+  }
+
+  async updateUserStatus(userId: string, status: UserStatus) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.status = status;
+    await user.save();
+
+    return {
+      message: 'User status updated',
+      user,
+    };
   }
 
   async getUserSummary(userId: string) {

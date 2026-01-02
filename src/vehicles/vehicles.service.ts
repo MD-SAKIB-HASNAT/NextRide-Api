@@ -11,6 +11,7 @@ import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
 import { UserRole } from 'src/common/enums/user.enum';
+import { UpdateRequestFilterDto } from './dto/update-request-filter.dto';
 import e from 'express';
 
 @Injectable()
@@ -492,31 +493,65 @@ export class VehiclesService {
   async getAllUpdateRequestsList(
     params: PaginationParams,
     user: any,
+    filters?: UpdateRequestFilterDto,
   ): Promise<PaginatedResult<UpdateRequest>> {
     try {
       const limit = this.paginationService.clampLimit(params.limit);
       const lastId = this.paginationService.decodeCursor(params.cursor);
 
-      const query: any = {};
+      const match: any = {};
 
       if (user?.role === UserRole.USER) {
         const userId = user?.userId || user?.id;
         if (!userId) {
           throw new BadRequestException('User not authenticated');
         }
-        query.userId = new Types.ObjectId(userId);
+        match.userId = new Types.ObjectId(userId);
+      }
+
+      if (filters?.status) {
+        match.status = filters.status;
       }
 
       if (lastId) {
-        query._id = { $gt: lastId };
+        match._id = { $gt: lastId };
       }
 
-      const items = await this.updateRequestModel
-        .find(query)
-        .sort({ _id: 1 })
-        .limit(limit + 1)
-        .populate('vehicleId')
-        .populate('userId', 'name email role');
+      const pipeline: any[] = [
+        { $match: match },
+        { $sort: { _id: 1 } },
+        {
+          $lookup: {
+            from: 'vehicles',
+            localField: 'vehicleId',
+            foreignField: '_id',
+            as: 'vehicleId',
+          },
+        },
+        { $unwind: '$vehicleId' },
+      ];
+
+      if (filters?.vehicleType) {
+        pipeline.push({ $match: { 'vehicleId.vehicleType': filters.vehicleType } });
+      }
+
+      pipeline.push(
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'userId',
+            pipeline: [
+              { $project: { name: 1, email: 1, role: 1 } },
+            ],
+          },
+        },
+        { $unwind: '$userId' },
+        { $limit: limit + 1 },
+      );
+
+      const items = await this.updateRequestModel.aggregate(pipeline);
 
       return this.paginationService.buildResponse(items as any, limit);
     } catch (error) {

@@ -9,6 +9,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
 import { SellerModule } from './seller/seller.module';
 import { SettingsModule } from './Admin/settings/settings.module';
 import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
+import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
     SellerModule,
     SettingsModule,
     AdminDashboardModule,
+    OrganizationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
