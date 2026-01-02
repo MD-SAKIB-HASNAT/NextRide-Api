@@ -10,7 +10,7 @@ export class SystemSetting extends Document {
   allowRegistration: boolean;
 
   @Prop({ type: Number, default: 0.05 })
-  commissionRate: number; // e.g., 5%
+  platformFeeRate: number; // e.g., 5%
 
   @Prop({ type: Number, default: 10 })
   maxListingsPerUser: number;

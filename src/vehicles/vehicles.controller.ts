@@ -174,7 +174,6 @@ export class VehiclesController {
     return this.vehiclesService.getAllUpdateRequestsList(pagination, req.user);
   }
 
-
   @Patch('admin/update-requests/:id')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

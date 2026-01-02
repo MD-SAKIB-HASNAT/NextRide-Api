@@ -35,7 +35,8 @@ export class VehiclesService {
       const videoPaths = video ? await this.fileUploadService.uploadFiles([video], 'vehicles/videos') : [];
 
       const systemSetting = await this.settingsModel.find();
-      const platformFee = createVehicleDto.price * systemSetting[0]?.commissionRate;
+      const platformFeeRate = systemSetting?.[0]?.platformFeeRate ?? 0;
+      const platformFee = Math.floor(Number(createVehicleDto.price) * platformFeeRate);
       
       const userObjectId = new Types.ObjectId(userId);
       const vehicle = new this.vehicleModel({
@@ -249,7 +250,6 @@ export class VehiclesService {
         vehicle.userId as Types.ObjectId,
         vehicle.vehicleType,
         vehicle.status,
-        vehicle.paymentStatus,
       );
 
       await vehicle.deleteOne();
@@ -263,7 +263,6 @@ export class VehiclesService {
     userId: Types.ObjectId,
     vehicleType: string,
     status: string,
-    paymentStatus: string,
   ) {
     try {
       const inc: any = { totalListings: -1 };
@@ -274,9 +273,6 @@ export class VehiclesService {
       if (status === VehicleStatus.ACTIVE) inc.activeCount = (inc.activeCount || 0) - 1;
       if (status === VehicleStatus.SOLD) inc.soldCount = (inc.soldCount || 0) - 1;
       if (status === VehicleStatus.REJECTED) inc.rejectedCount = (inc.rejectedCount || 0) - 1;
-
-      if (paymentStatus === PaymentStatus.PAID) inc.paidCount = (inc.paidCount || 0) - 1;
-      else if (paymentStatus === PaymentStatus.PENDING) inc.pendingCount = (inc.pendingCount || 0) - 1;
 
       await this.userSummaryModel.findOneAndUpdate(
         { userId },
@@ -434,7 +430,8 @@ export class VehiclesService {
       
       // Recalculate platformFee
       const systemSetting = await this.settingsModel.find();
-      vehicle.platformFee = vehicle.price * (systemSetting[0]?.commissionRate ?? 0);
+      const platformFeeRate = systemSetting?.[0]?.platformFeeRate ?? 0;
+      vehicle.platformFee = Math.floor(Number(vehicle.price) * platformFeeRate);
       
       await vehicle.save();
 

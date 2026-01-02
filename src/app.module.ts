@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { SellerModule } from './seller/seller.module';
 import { SettingsModule } from './Admin/settings/settings.module';
+import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SettingsModule } from './Admin/settings/settings.module';
     VehiclesModule,
     SellerModule,
     SettingsModule,
+    AdminDashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
