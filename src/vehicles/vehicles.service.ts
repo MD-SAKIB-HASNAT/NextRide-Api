@@ -298,15 +298,6 @@ export class VehiclesService {
       }
 
       const oldStatus = vehicle.status;
-      if(status === VehicleStatus.ACTIVE){
-        vehicle.paymentStatus = PaymentStatus.PAID;
-      }
-      if(status === VehicleStatus.SOLD){
-        vehicle.paymentStatus = PaymentStatus.PAID;
-      }
-      if(status === VehicleStatus.REJECTED){
-        vehicle.paymentStatus = PaymentStatus.PENDING;
-      }
 
       vehicle.status = status;
       const updated = await vehicle.save();

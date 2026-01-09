@@ -34,6 +34,16 @@ export class UserService {
     // Check if user already exists
     const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
+
+      if(existingUser.status === UserStatus.BLOCKED){
+        throw new ConflictException('This email is associated with a deactivated account. Please contact support to reactivate your account.');
+      }
+      else if(existingUser.emailVerified === false){
+        return existingUser;
+      }
+      else if(existingUser.status === UserStatus.PENDING){
+        throw new ConflictException('An account with this email already exists and is pending verification. Please check your email for the verification link or contact support for assistance.');
+      }
       throw new ConflictException('Email already registered');
     }
 

@@ -11,6 +11,7 @@ import { SettingsModule } from './Admin/settings/settings.module';
 import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
 import { OrganizationModule } from './organization/organization.module';
 import { RentModule } from './rent/rent.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RentModule } from './rent/rent.module';
     AdminDashboardModule,
     OrganizationModule,
     RentModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

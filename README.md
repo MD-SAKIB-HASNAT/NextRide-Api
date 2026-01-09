@@ -44,6 +44,41 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## SSLCommerz Setup
+
+Environment variables required (create `.env` in project root):
+
+```
+SSL_STORE_ID=your_store_id
+SSL_STORE_PASSWORD=your_store_password
+SSL_MODE=sandbox # or live
+BACKEND_BASE_URL=http://localhost:3000
+FRONTEND_BASE_URL=http://localhost:5173
+```
+
+Payment endpoints:
+
+- `POST /payment/initiate` → Initiates a transaction and returns `{ url }` to redirect users to the gateway. Example payload:
+
+```
+{
+  "referenceId": "LISTING_123",
+  "amount": 100,
+  "currency": "BDT",
+  "product_name": "Listing Payment",
+  "product_category": "Listing",
+  "product_profile": "general",
+  "cus_name": "Customer",
+  "cus_email": "customer@test.com",
+  "cus_phone": "01711111111"
+}
+```
+
+- `POST /payment/success|fail|cancel` → Callback URLs used by SSLCommerz. The backend redirects to the frontend pages.
+- `POST /payment/ipn` → IPN handler (extend to persist and reconcile payments).
+
+Use sandbox credentials from your SSLCommerz dashboard for local testing.
+
 ## Run tests
 
 ```bash
