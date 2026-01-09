@@ -44,7 +44,7 @@ export class PaymentController {
     async cancel(@Req() req: Request, @Res() res: Response) {
         const { tran_id } = (req.body || {}) as any;
         if (tran_id) {
-            await this.paymentService.markPaymentFailed(tran_id);
+            await this.paymentService.markPaymentCancelled(tran_id);
         }
         const url = (process.env.FRONTEND_BASE_URL || 'http://localhost:5173') +
           `/payment/cancel?tran_id=${encodeURIComponent(tran_id || '')}`;
