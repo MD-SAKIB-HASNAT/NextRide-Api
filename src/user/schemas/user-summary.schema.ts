@@ -29,6 +29,9 @@ export class UserSummary extends Document {
 
   @Prop({ default: 0 })
   totalListings: number;
+
+  @Prop({ default: 0 })
+  rentVehicleCount: number;
 }
 
 export const UserSummarySchema = SchemaFactory.createForClass(UserSummary);

@@ -37,7 +37,7 @@ export class VehiclesService {
 
       const systemSetting = await this.settingsModel.find();
       const platformFeeRate = systemSetting?.[0]?.platformFeeRate ?? 0;
-      const platformFee = Math.floor(Number(createVehicleDto.price) * platformFeeRate);
+      const platformFee = Math.floor(Number(createVehicleDto.price) * platformFeeRate)/100;
       
       const userObjectId = new Types.ObjectId(userId);
       const vehicle = new this.vehicleModel({

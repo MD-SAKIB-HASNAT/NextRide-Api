@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { RentVehicle } from './schemas/rent-vehicle.schema';
+import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { CreateRentVehicleDto } from './dto/create-rent-vehicle.dto';
 import { FilterRentVehicleDto } from './dto/filter-rent-vehicle.dto';
 import { PaginationService } from 'src/common/services/pagination.service';
@@ -11,6 +12,7 @@ import { FileUploadService } from 'src/common/services/file-upload.service';
 export class RentService {
   constructor(
     @InjectModel(RentVehicle.name) private rentVehicleModel: Model<RentVehicle>,
+    @InjectModel(UserSummary.name) private userSummaryModel: Model<UserSummary>,
     private paginationService: PaginationService,
     private fileUploadService: FileUploadService,
   ) {}
@@ -33,7 +35,16 @@ export class RentService {
         availability: 'available',
       });
 
-      return await rentVehicle.save();
+      const savedVehicle = await rentVehicle.save();
+
+      // Update user summary
+      await this.userSummaryModel.findOneAndUpdate(
+        { userId: new Types.ObjectId(ownerId) },
+        { $inc: { rentVehicleCount: 1 } },
+        { upsert: true, new: true },
+      );
+
+      return savedVehicle;
     } catch (error) {
       throw new BadRequestException(error.message || 'Failed to create rent vehicle');
     }
@@ -163,6 +174,30 @@ export class RentService {
     }
   }
 
+  async updateRentVehicleAvailability(id: string, availability: string, ownerId: string) {
+    try {
+      const vehicle = await this.rentVehicleModel.findById(id);
+      if (!vehicle) {
+        throw new NotFoundException('Rent vehicle not found');
+      }
+
+      // Check if the user is the owner
+      if (vehicle.ownerId.toString() !== ownerId) {
+        throw new ForbiddenException('You can only update your own vehicles');
+      }
+
+      vehicle.availability = availability as any;
+      await vehicle.save();
+
+      return {
+        message: 'Availability updated successfully',
+        vehicle,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to update availability');
+    }
+  }
+
   async deleteRentVehicle(id: string, userId: string) {
     try {
       const vehicle = await this.rentVehicleModel.findById(id);
@@ -182,6 +217,13 @@ export class RentService {
       }
 
       await this.rentVehicleModel.findByIdAndDelete(id);
+
+      // Update user summary
+      await this.userSummaryModel.findOneAndUpdate(
+        { userId: vehicle.ownerId },
+        { $inc: { rentVehicleCount: -1 } },
+        { new: true },
+      );
 
       return { message: 'Rent vehicle deleted successfully' };
     } catch (error) {

@@ -17,7 +17,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { RentService } from './rent.service';
 import { CreateRentVehicleDto } from './dto/create-rent-vehicle.dto';
 import { FilterRentVehicleDto } from './dto/filter-rent-vehicle.dto';
-import { UpdateRentVehicleStatusDto } from './dto/update-rent-vehicle-status.dto';
+import { UpdateRentVehicleStatusDto, UpdateRentVehicleAvailabilityDto } from './dto/update-rent-vehicle-status.dto';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -56,6 +56,12 @@ export class RentController {
     }
 
     const images = files?.images || [];
+    
+    // Validate at least one image is uploaded
+    if (images.length === 0) {
+      throw new BadRequestException('At least one image is required for the rent vehicle');
+    }
+    
     return this.rentService.createRentVehicle(createDto, userId, images);
   }
 
@@ -103,6 +109,24 @@ export class RentController {
       id,
       updateDto.status,
       adminId,
+    );
+  }
+
+  @Patch(':id/availability')
+  @UseGuards(AuthGuard)
+  async updateRentVehicleAvailability(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() updateDto: UpdateRentVehicleAvailabilityDto,
+  ) {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+    return this.rentService.updateRentVehicleAvailability(
+      id,
+      updateDto.availability,
+      userId,
     );
   }
 

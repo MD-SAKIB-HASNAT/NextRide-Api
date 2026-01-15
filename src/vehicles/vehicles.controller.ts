@@ -65,6 +65,11 @@ export class VehiclesController {
     const images = files?.images || [];
     const video = files?.video?.[0];
 
+    // Validate at least one image is uploaded
+    if (images.length === 0) {
+      throw new BadRequestException('At least one image is required for the vehicle listing');
+    }
+
     return this.vehiclesService.createVehicle(
       createVehicleDto,
       userId,
