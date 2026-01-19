@@ -12,7 +12,7 @@ import { AdminDashboardModule } from './Admin/dashboard/admin-dashboard.module';
 import { OrganizationModule } from './organization/organization.module';
 import { RentModule } from './rent/rent.module';
 import { PaymentModule } from './payment/payment.module';
-
+import { AiModule } from './ai/ai.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -29,6 +29,7 @@ import { PaymentModule } from './payment/payment.module';
     OrganizationModule,
     RentModule,
     PaymentModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

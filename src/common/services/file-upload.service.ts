@@ -95,6 +95,7 @@ export class FileUploadService {
     const filePaths: string[] = [];
     
     try {
+      //console.log(files[0].filename);
       for (const file of files) {
         filePaths.push(`${folder}/${file.filename}`);
       }

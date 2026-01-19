@@ -172,7 +172,7 @@ export class VehiclesController {
 
   @Get('updates-requests/list')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.USER)
+  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.ORGANIZATION)
   async getAllUpdateRequestsList(
     @Request() req: any,
     @CursorPagination() pagination: PaginationParams,

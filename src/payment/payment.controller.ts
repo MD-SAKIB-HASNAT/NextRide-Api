@@ -1,7 +1,10 @@
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Post, Req, Res, Get, UseGuards, Query } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import type { Response, Request } from 'express';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
+import { AuthGuard } from 'src/auth/guards/auth.guard';
+import { CursorPagination } from 'src/common/decorators/cursor-pagination.decorator';
+import type { PaginationParams } from 'src/common/services/pagination.service';
 
 @Controller('payment')
 export class PaymentController {
@@ -49,6 +52,17 @@ export class PaymentController {
         const url = (process.env.FRONTEND_BASE_URL || 'http://localhost:5173') +
           `/payment/cancel?tran_id=${encodeURIComponent(tran_id || '')}`;
         return res.redirect(url);
+    }
+
+    @Get('history')
+    @UseGuards(AuthGuard)
+    async getPaymentHistory(
+        @Req() req: Request,
+        @CursorPagination() pagination: PaginationParams,
+        @Query('status') status?: string,
+    ) {
+        const userId = (req.user as any)?.userId || (req.user as any)?.id;
+        return this.paymentService.getPaymentHistory(userId, pagination, status);
     }
 
 }

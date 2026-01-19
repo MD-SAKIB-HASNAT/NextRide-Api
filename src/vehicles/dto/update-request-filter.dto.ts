@@ -1,5 +1,6 @@
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsNumber } from 'class-validator';
 import { VehicleType } from 'src/common/enums/vehicle.enum';
+import { Type } from 'class-transformer';
 
 export enum UpdateRequestStatus {
   PENDING = 'pending',
@@ -16,4 +17,13 @@ export class UpdateRequestFilterDto {
   @IsOptional()
   @IsEnum(VehicleType)
   vehicleType?: VehicleType;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
 }

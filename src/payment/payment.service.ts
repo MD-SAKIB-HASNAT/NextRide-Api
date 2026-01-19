@@ -7,12 +7,14 @@ import { Vehicle } from '../vehicles/schemas/vehicle.schema';
 import { PaymentStatus, VehicleStatus } from '../common/enums/vehicle.enum';
 import { PaymentTransaction } from './schemas/payment-transaction.schema';
 import { PaymentStatus as TransactionStatus } from './schemas/payment-transaction.schema';
+import { PaginationService, PaginationParams, PaginatedResult } from 'src/common/services/pagination.service';
 
 @Injectable()
 export class PaymentService {
   constructor(
     @InjectModel(Vehicle.name) private vehicleModel: Model<Vehicle>,
     @InjectModel(PaymentTransaction.name) private paymentTransactionModel: Model<PaymentTransaction>,
+    private paginationService: PaginationService,
   ) {}
 
   async initiatePayment(payload: InitiatePaymentDto) {
@@ -157,6 +159,50 @@ export class PaymentService {
       return { success: true };
     } catch (error) {
       throw new BadRequestException(error.message || 'Failed to mark payment cancelled');
+    }
+  }
+
+  async getPaymentHistory(
+    userId: string,
+    params: PaginationParams,
+    status?: string,
+  ): Promise<PaginatedResult<PaymentTransaction>> {
+    try {
+      const limit = this.paginationService.clampLimit(params.limit);
+      const lastId = this.paginationService.decodeCursor(params.cursor);
+
+      const match: any = {
+        userId: new Types.ObjectId(userId),
+      };
+
+      if (status) {
+        match.status = status;
+      }
+
+      if (lastId) {
+        match._id = { $gt: lastId };
+      }
+
+      const pipeline: any[] = [
+        { $match: match },
+        { $sort: { _id: -1 } },
+        {
+          $lookup: {
+            from: 'vehicles',
+            localField: 'vehicleId',
+            foreignField: '_id',
+            as: 'vehicleId',
+          },
+        },
+        { $unwind: { path: '$vehicleId', preserveNullAndEmptyArrays: true } },
+        { $limit: limit + 1 },
+      ];
+
+      const items = await this.paymentTransactionModel.aggregate(pipeline);
+
+      return this.paginationService.buildResponse(items as any, limit);
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to fetch payment history');
     }
   }
 
