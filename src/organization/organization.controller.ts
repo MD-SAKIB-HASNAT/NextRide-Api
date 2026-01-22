@@ -1,10 +1,11 @@
-import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user.enum';
 import { OrganizationService } from './organization.service';
 import { FilterOrganizationDto } from './dto/filter-organization.dto';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CursorPagination } from 'src/common/decorators/cursor-pagination.decorator';
 import type { PaginationParams } from 'src/common/services/pagination.service';
 
@@ -13,6 +14,11 @@ import type { PaginationParams } from 'src/common/services/pagination.service';
 @Roles(UserRole.ADMIN)
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
+
+  @Post()
+  async createOrganization(@Body() dto: CreateOrganizationDto) {
+    return this.organizationService.createOrganization(dto);
+  }
 
   @Get()
   async getAllOrganizations(

@@ -312,6 +312,38 @@ export class VehiclesService {
     }
   }
 
+  async markVehicleAsSold(vehicleId: string, userId: string) {
+    try {
+      const vehicle = await this.vehicleModel.findById(vehicleId);
+      if (!vehicle) {
+        throw new BadRequestException('Vehicle not found');
+      }
+
+      const isOwner = String(vehicle.userId) === String(userId);
+      if (!isOwner) {
+        throw new BadRequestException('Not authorized to update this listing');
+      }
+
+      if (vehicle.status === VehicleStatus.SOLD) {
+        return vehicle;
+      }
+
+      const oldStatus = vehicle.status;
+      vehicle.status = VehicleStatus.SOLD;
+      const updated = await vehicle.save();
+
+      await this.updateUserSummaryOnStatusChange(
+        vehicle.userId as Types.ObjectId,
+        oldStatus,
+        VehicleStatus.SOLD,
+      );
+
+      return updated;
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to mark vehicle as sold');
+    }
+  }
+
   private async updateUserSummaryOnCreate(userId: Types.ObjectId, vehicleType: string) {
     try {
       const updateData: any = {

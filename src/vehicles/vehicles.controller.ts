@@ -170,6 +170,20 @@ export class VehiclesController {
     return this.vehiclesService.updateVehicleStatus(id, body.status);
   }
 
+  @Patch(':id/mark-sold')
+  @UseGuards(AuthGuard)
+  async markVehicleAsSold(
+    @Request() req: any,
+    @Param('id') id: string,
+  ) {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    return this.vehiclesService.markVehicleAsSold(id, userId);
+  }
+
   @Get('updates-requests/list')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.USER, UserRole.ORGANIZATION)

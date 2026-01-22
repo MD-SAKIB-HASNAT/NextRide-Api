@@ -15,4 +15,11 @@ export class AdminDashboardController {
   async getOverview() {
     return this.adminDashboardService.getOverview();
   }
+
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('analytics')
+  async getAnalytics() {
+    return this.adminDashboardService.getAnalytics();
+  }
 }

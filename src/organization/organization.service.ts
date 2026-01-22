@@ -4,7 +4,9 @@ import { Model } from 'mongoose';
 import { User } from 'src/user/schemas/user.schema';
 import { UserRole, UserStatus } from 'src/common/enums/user.enum';
 import * as nodemailer from 'nodemailer';
+import * as bcrypt from 'bcrypt';
 import { FilterOrganizationDto } from './dto/filter-organization.dto';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { PaginationService, PaginationParams } from 'src/common/services/pagination.service';
 
 @Injectable()
@@ -37,6 +39,69 @@ export class OrganizationService {
       subject,
       html: body,
     });
+  }
+
+  private generateRandomPassword(length = 12): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  }
+
+  async createOrganization(dto: CreateOrganizationDto) {
+    const existingUser = await this.userModel.findOne({ email: dto.email });
+    if (existingUser) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    const plainPassword = this.generateRandomPassword();
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    const organization = new this.userModel({
+      name: dto.name,
+      email: dto.email,
+      phone: dto.phone,
+      password: hashedPassword,
+      role: UserRole.ORGANIZATION,
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+    });
+
+    await organization.save();
+
+    try {
+      await this.sendStatusEmail(
+        dto.email,
+        'Organization Account Created - NextRide',
+        `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0ea5e9;">Welcome to NextRide!</h2>
+          <p>Hi ${dto.name},</p>
+          <p>Your organization account has been created by the admin. Below are your login credentials:</p>
+          <div style="background-color: #f1f5f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${dto.email}</p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> ${plainPassword}</p>
+          </div>
+          <p><strong>Important:</strong> Please change your password after your first login for security purposes.</p>
+          <p>You can now sign in at <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login">NextRide Login</a></p>
+          <p>Best regards,<br/>NextRide Team</p>
+        </div>`,
+      );
+    } catch (err) {
+      console.error('Failed to send organization credentials email', err);
+      throw new BadRequestException('Organization created but failed to send email. Please contact support.');
+    }
+
+    return {
+      message: 'Organization created successfully and credentials sent via email',
+      organization: {
+        id: organization._id,
+        name: organization.name,
+        email: organization.email,
+        phone: organization.phone,
+      },
+    };
   }
 
   async listOrganizations(filter: FilterOrganizationDto, params: PaginationParams) {

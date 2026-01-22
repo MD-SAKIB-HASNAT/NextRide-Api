@@ -6,6 +6,10 @@ import { Vehicle, VehicleSchema } from 'src/vehicles/schemas/vehicle.schema';
 import { UpdateRequest, UpdateRequestSchema } from 'src/vehicles/schemas/update-request.schema';
 import { UserSummary, UserSummarySchema } from 'src/user/schemas/user-summary.schema';
 import { AuthModule } from 'src/auth/auth.module';
+import {
+  PaymentTransaction,
+  PaymentTransactionSchema,
+} from 'src/payment/schemas/payment-transaction.schema';
 
 @Module({
   imports: [
@@ -13,6 +17,7 @@ import { AuthModule } from 'src/auth/auth.module';
       { name: Vehicle.name, schema: VehicleSchema },
       { name: UpdateRequest.name, schema: UpdateRequestSchema },
       { name: UserSummary.name, schema: UserSummarySchema },
+      { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
     ]),
     AuthModule,
   ],
