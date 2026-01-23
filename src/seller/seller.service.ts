@@ -19,8 +19,7 @@ export class SellerService {
 
       const query: any = {
         userId: new Types.ObjectId(sellerId),
-        status: VehicleStatus.ACTIVE,
-        paymentStatus: PaymentStatus.PAID,
+        status: VehicleStatus.ACTIVE
       };
 
       if (lastId) {

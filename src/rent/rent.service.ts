@@ -24,7 +24,7 @@ export class RentService {
   ) {
     try {
       const imagePaths = images && images.length > 0
-        ? await this.fileUploadService.uploadFiles(images, 'rent-vehicles')
+        ? await this.fileUploadService.uploadFiles(images, 'rent-vehicles/images')
         : [];
 
       const rentVehicle = new this.rentVehicleModel({
