@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
+import { ReceiptService } from './receipt.service';
 import { AdminPaymentController } from './admin-payment.controller';
 import { AdminPaymentService } from './admin-payment.service';
 import { Vehicle, VehicleSchema } from '../vehicles/schemas/vehicle.schema';
@@ -18,6 +19,6 @@ import { AuthModule } from 'src/auth/auth.module';
     AuthModule,
   ],
   controllers: [PaymentController, AdminPaymentController],
-  providers: [PaymentService, AdminPaymentService, PaginationService],
+  providers: [PaymentService, ReceiptService, AdminPaymentService, PaginationService],
 })
 export class PaymentModule {}

@@ -1,5 +1,6 @@
-import { Body, Controller, Post, Req, Res, Get, UseGuards, Query } from '@nestjs/common';
+import { Body, Controller, Post, Req, Res, Get, UseGuards, Query, Param } from '@nestjs/common';
 import { PaymentService } from './payment.service';
+import { ReceiptService } from './receipt.service';
 import type { Response, Request } from 'express';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
@@ -8,7 +9,10 @@ import type { PaginationParams } from 'src/common/services/pagination.service';
 
 @Controller('payment')
 export class PaymentController {
-    constructor(private readonly paymentService: PaymentService) {}
+    constructor(
+        private readonly paymentService: PaymentService,
+        private readonly receiptService: ReceiptService,
+    ) {}
 
     @Post('initiate')
     async initiatePayment(@Body() body: InitiatePaymentDto) {
@@ -63,6 +67,15 @@ export class PaymentController {
     ) {
         const userId = (req.user as any)?.userId || (req.user as any)?.id;
         return this.paymentService.getPaymentHistory(userId, pagination, status);
+    }
+
+    @Get('receipt/:id')
+    @UseGuards(AuthGuard)
+    async downloadReceipt(
+        @Param('id') transactionId: string,
+        @Res() res: Response,
+    ) {
+        return this.receiptService.generateReceiptPDF(transactionId, res);
     }
 
 }
