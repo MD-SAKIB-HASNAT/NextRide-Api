@@ -39,6 +39,9 @@ export class VehiclesService {
       const platformFeeRate = systemSetting?.[0]?.platformFeeRate ?? 0;
       const platformFee = Math.floor(Number(createVehicleDto.price) * platformFeeRate)/100;
       
+      // If platform fee is 0, mark payment as paid
+      const paymentStatus = platformFee === 0 ? PaymentStatus.PAID : PaymentStatus.PENDING;
+      
       const userObjectId = new Types.ObjectId(userId);
       const vehicle = new this.vehicleModel({
         ...createVehicleDto,
@@ -46,7 +49,7 @@ export class VehiclesService {
         video: videoPaths[0] || null,
         userId: userObjectId,
         status: VehicleStatus.PENDING,
-        paymentStatus: PaymentStatus.PENDING,
+        paymentStatus: paymentStatus,
         platformFee: platformFee,
       });
 
