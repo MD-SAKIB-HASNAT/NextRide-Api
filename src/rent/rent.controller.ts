@@ -70,6 +70,11 @@ export class RentController {
     return this.rentService.listRentVehicles(filters, false);
   }
 
+  @Get('public/suggested')
+  async getSuggestedRentVehicles() {
+    return this.rentService.getSuggestedRentVehicles();
+  }
+
   @Get('admin/list')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

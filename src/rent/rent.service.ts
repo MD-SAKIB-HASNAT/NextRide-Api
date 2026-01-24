@@ -50,6 +50,26 @@ export class RentService {
     }
   }
 
+  async getSuggestedRentVehicles() {
+    try {
+      const vehicles = await this.rentVehicleModel
+        .find({
+          status: 'approved',
+          availability: 'available',
+        })
+        .sort({ createdAt: -1 })
+        .limit(4)
+        .populate('ownerId', 'name email phone')
+        .lean();
+
+      return {
+        data: vehicles,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to fetch suggested rent vehicles');
+    }
+  }
+
   async listRentVehicles(filters: FilterRentVehicleDto, includeAllStatuses = false) {
     try {
       const query: any = {};

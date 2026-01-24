@@ -253,7 +253,6 @@ export class AuthService {
 
     // Return user without password
     const { password: _, ...userWithoutPassword } = user.toObject();
-
     return {
       success: true,
       message: 'Login successful',
