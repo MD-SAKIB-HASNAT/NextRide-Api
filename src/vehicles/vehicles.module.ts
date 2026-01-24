@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { VehiclesController } from './vehicles.controller';
 import { VehiclesService } from './vehicles.service';
 import { Vehicle, VehicleSchema } from './schemas/vehicle.schema';
+import { User, UserSchema } from 'src/user/schemas/user.schema';
 import { UserSummary, UserSummarySchema } from 'src/user/schemas/user-summary.schema';
 import { UpdateRequest, UpdateRequestSchema } from './schemas/update-request.schema';
 import { FileUploadService } from 'src/common/services/file-upload.service';
@@ -15,6 +16,7 @@ import { SystemSetting, SystemSettingSchema } from 'src/Admin/settings/schemas/s
   imports: [
     MongooseModule.forFeature([
       { name: Vehicle.name, schema: VehicleSchema },
+      { name: User.name, schema: UserSchema },
       { name: UserSummary.name, schema: UserSummarySchema },
       { name: UpdateRequest.name, schema: UpdateRequestSchema },
       { name: SystemSetting.name, schema: SystemSettingSchema},

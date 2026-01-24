@@ -2,16 +2,19 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { RentVehicle } from './schemas/rent-vehicle.schema';
+import { User } from 'src/user/schemas/user.schema';
 import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { CreateRentVehicleDto } from './dto/create-rent-vehicle.dto';
 import { FilterRentVehicleDto } from './dto/filter-rent-vehicle.dto';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { FileUploadService } from 'src/common/services/file-upload.service';
+import { UserStatus } from 'src/common/enums/user.enum';
 
 @Injectable()
 export class RentService {
   constructor(
     @InjectModel(RentVehicle.name) private rentVehicleModel: Model<RentVehicle>,
+    @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(UserSummary.name) private userSummaryModel: Model<UserSummary>,
     private paginationService: PaginationService,
     private fileUploadService: FileUploadService,
@@ -52,10 +55,19 @@ export class RentService {
 
   async getSuggestedRentVehicles() {
     try {
+      // Get active user IDs
+      const activeUsers = await this.userModel
+        .find({ status: UserStatus.ACTIVE })
+        .select('_id')
+        .lean();
+      
+      const activeUserIds = activeUsers.map(user => user._id);
+
       const vehicles = await this.rentVehicleModel
         .find({
           status: 'approved',
           availability: 'available',
+          ownerId: { $in: activeUserIds },
         })
         .sort({ createdAt: -1 })
         .limit(4)
@@ -96,6 +108,17 @@ export class RentService {
           { address: regex },
           { description: regex },
         ];
+      }
+
+      // Filter by active users only for public listings
+      if (!includeAllStatuses) {
+        const activeUsers = await this.userModel
+          .find({ status: UserStatus.ACTIVE })
+          .select('_id')
+          .lean();
+        
+        const activeUserIds = activeUsers.map(user => user._id);
+        query.ownerId = { $in: activeUserIds };
       }
 
       const limit = this.paginationService.clampLimit(filters.limit);

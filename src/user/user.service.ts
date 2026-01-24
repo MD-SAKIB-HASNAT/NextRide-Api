@@ -11,15 +11,19 @@ import { User } from './schemas/user.schema';
 import * as bcrypt from 'bcrypt';
 import { UserRole, UserStatus } from 'src/common/enums/user.enum';
 import { FileUploadService } from 'src/common/services/file-upload.service';
+import { EmailService } from 'src/common/services/email.service';
 import { PaginationService, PaginationParams } from 'src/common/services/pagination.service';
 import { FilterUserDto } from './dto/filter-user.dto';
+import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel('UserSummary') private userSummaryModel: Model<any>,
+    @InjectModel(SystemSetting.name) private settingsModel: Model<SystemSetting>,
     private fileUploadService: FileUploadService,
+    private emailService: EmailService,
     private paginationService: PaginationService,
   ) {}
 
@@ -219,8 +223,43 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
+    const oldStatus = user.status;
     user.status = status;
     await user.save();
+
+    // Send notification email if status changed
+    if (oldStatus !== status) {
+      const settings = await this.settingsModel.find();
+      const supportEmail = settings?.[0]?.contactEmail || 'support@nextride.com';
+      
+      const statusMessages = {
+        [UserStatus.ACTIVE]: 'Your account has been activated successfully! You can now access all features.',
+        [UserStatus.PENDING]: 'Your account is pending. Please complete your email verification.',
+        [UserStatus.PENDING_APPROVAL]: 'Your account is pending approval from our admin team. We will review your details and get back to you soon.',
+        [UserStatus.BLOCKED]: 'Your account has been deactivated. If you believe this is a mistake, please contact our support team.',
+      };
+
+      const subject = `NextRide: Your Account Status Updated`;
+      const html = `
+        <div style="font-family: Arial, sans-serif; color:#0f172a;">
+          <p>Hi ${user.name},</p>
+          <p>Your account status has been updated.</p>
+          <p><strong>New Status:</strong> ${status.toUpperCase()}</p>
+          <p>${statusMessages[status] || 'Your account status has been updated.'}</p>
+          <p>If you have any questions or concerns, please don't hesitate to contact our support team at <a href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+          <p><em>This is an automated message. Please do not reply to this email.</em></p>
+          <hr />
+          <p>Best regards,<br/>NextRide Team</p>
+        </div>
+      `;
+
+      try {
+        await this.emailService.sendEmail(user.email, subject, html);
+      } catch (error) {
+        // Don't block status change on email failures
+        console.error('Email send failed:', error?.message || error);
+      }
+    }
 
     return {
       message: 'User status updated',

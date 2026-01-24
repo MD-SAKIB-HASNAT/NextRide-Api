@@ -8,10 +8,11 @@ import { PaymentStatus, VehicleStatus, VehicleType } from 'src/common/enums/vehi
 import { FileUploadService } from 'src/common/services/file-upload.service';
 import { EmailService } from 'src/common/services/email.service';
 import { PaginationService, PaginationParams, PaginatedResult } from 'src/common/services/pagination.service';
+import { User } from 'src/user/schemas/user.schema';
 import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { SystemSetting } from 'src/Admin/settings/schemas/system-setting.schema';
-import { UserRole } from 'src/common/enums/user.enum';
+import { UserRole, UserStatus } from 'src/common/enums/user.enum';
 import { UpdateRequestFilterDto } from './dto/update-request-filter.dto';
 import e from 'express';
 
@@ -19,6 +20,7 @@ import e from 'express';
 export class VehiclesService {
   constructor(
     @InjectModel(Vehicle.name) private vehicleModel: Model<Vehicle>,
+    @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(UserSummary.name) private userSummaryModel: Model<UserSummary>,
     @InjectModel(UpdateRequest.name) private updateRequestModel: Model<UpdateRequest>,
     @InjectModel(SystemSetting.name) private settingsModel: Model<SystemSetting>,
@@ -126,6 +128,17 @@ export class VehiclesService {
       if (lastId) {
         query._id = { $gt: lastId };
       }
+
+      // Get active user IDs
+      const activeUsers = await this.userModel
+        .find({ status: UserStatus.ACTIVE })
+        .select('_id')
+        .lean();
+      
+      const activeUserIds = activeUsers.map(user => user._id);
+      
+      // Filter vehicles by active users
+      query.userId = { $in: activeUserIds };
 
       const items = await this.vehicleModel
         .find(query)
