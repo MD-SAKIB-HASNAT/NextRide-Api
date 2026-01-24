@@ -6,6 +6,7 @@ import { UpdateRequest } from './schemas/update-request.schema';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { PaymentStatus, VehicleStatus, VehicleType } from 'src/common/enums/vehicle.enum';
 import { FileUploadService } from 'src/common/services/file-upload.service';
+import { EmailService } from 'src/common/services/email.service';
 import { PaginationService, PaginationParams, PaginatedResult } from 'src/common/services/pagination.service';
 import { UserSummary } from 'src/user/schemas/user-summary.schema';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
@@ -22,6 +23,7 @@ export class VehiclesService {
     @InjectModel(UpdateRequest.name) private updateRequestModel: Model<UpdateRequest>,
     @InjectModel(SystemSetting.name) private settingsModel: Model<SystemSetting>,
     private fileUploadService: FileUploadService,
+    private emailService: EmailService,
     private paginationService: PaginationService,
   ) {}
 
@@ -294,7 +296,9 @@ export class VehiclesService {
         throw new BadRequestException('Invalid vehicle status');
       }
 
-      const vehicle = await this.vehicleModel.findById(vehicleId);
+      const vehicle = await this.vehicleModel
+        .findById(vehicleId)
+        .populate('userId', 'name email');
 
       if (!vehicle) {
         throw new BadRequestException('Vehicle not found');
@@ -307,6 +311,32 @@ export class VehiclesService {
 
       if (oldStatus !== status) {
         await this.updateUserSummaryOnStatusChange(vehicle.userId as Types.ObjectId, oldStatus, status);
+
+        // Send notification email to seller
+        const sellerEmail = (vehicle as any)?.userId?.email;
+        const sellerName = (vehicle as any)?.userId?.name || 'Seller';
+        const settings = await this.settingsModel.find();
+        const supportEmail = settings?.[0]?.contactEmail || 'support@nextride.com';
+        const subject = `NextRide: Your listing status changed to ${status}`;
+        const html = `
+          <div style="font-family: Arial, sans-serif; color:#0f172a;">
+            <p>Hi ${sellerName},</p>
+            <p>Your vehicle listing <strong>${vehicle.make} ${vehicle.modelName}</strong> has been updated by admin.</p>
+            <p><strong>New Status:</strong> ${status}</p>
+            <p>If you have any questions, please contact our support team at <a href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+            <p><em>This is an automated message. Please do not reply to this email.</em></p>
+            <hr />
+            <p>NextRide</p>
+          </div>
+        `;
+        if (sellerEmail) {
+          try {
+            await this.emailService.sendEmail(sellerEmail, subject, html);
+          } catch (e) {
+            // Don't block status change on email failures
+            console.error('Email send failed:', e?.message || e);
+          }
+        }
       }
 
       return updated;
