@@ -18,13 +18,18 @@ export class PaymentService {
   ) {}
 
   async initiatePayment(payload: InitiatePaymentDto) {
+    if (!process.env.SSL_STORE_ID || !process.env.SSL_STORE_PASSWORD) {
+      throw new BadRequestException('Payment gateway not configured. Please set SSL_STORE_ID and SSL_STORE_PASSWORD.');
+    }
+
     const backendBaseUrl = process.env.BACKEND_BASE_URL || process.env.VITE_API_URL || 'http://localhost:3003';
     const tranId = `${payload.referenceId}TXN_${Date.now()}`;
+    const amount = Number(Number(payload.amount).toFixed(2));
     
     const data = {
       store_id: process.env.SSL_STORE_ID,
       store_passwd: process.env.SSL_STORE_PASSWORD,
-      total_amount: payload.amount,
+      total_amount: amount,
       currency: payload.currency || 'BDT',
       tran_id: tranId,
       success_url: `${backendBaseUrl}/payment/success`,
@@ -51,11 +56,17 @@ export class PaymentService {
       }
     });
 
-    const response = await axios.post(
-      'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
-      formData.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    let response;
+    try {
+      response = await axios.post(
+        'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
+        formData.toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+    } catch (error) {
+      const msg = error?.response?.data?.failedreason || error?.response?.data?.error || error.message;
+      throw new BadRequestException(msg || 'Failed to initiate payment');
+    }
 
     // Store payment transaction in database
     const vehicle = await this.vehicleModel.findById(payload.referenceId).populate('userId');

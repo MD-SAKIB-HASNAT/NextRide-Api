@@ -1,7 +1,7 @@
-import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsPositive, IsString, IsNumber } from 'class-validator';
 
 export class InitiatePaymentDto {
-  @IsInt()
+  @IsNumber({}, { message: 'amount must be a number' })
   @IsPositive()
   amount: number;
 
